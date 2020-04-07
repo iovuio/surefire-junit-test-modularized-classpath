@@ -1,0 +1,69 @@
+= Test classes not exposed by the modules they're in
+
+
+Use case:
+
+. Your project is packaged for use with Apache Maven.
+. Your projects is built with JDK9 or later
+. You have a project that defined modules as defined by Java Platform Module System.
+. You need to test your classes.
+
+Maven makes unit testing a first class citizen practice  through https://github.com/apache/maven-surefire[`maven-surefire-plugin`].
+
+At the time of writing latest stable version is https://search.maven.org/artifact/org.apache.maven.plugins/maven-surefire-plugin/2.22.2/maven-plugin[*2.22.2*].
+
+In the context of the above use case, attempting to test with that version of the plugin will get you an `InaccessibleObjectException`.
+
+It is now possible to tell maven to bypass the module system during testing and use the classpath instead: (c.f https://github.com/apache/maven-surefire/blob/release/3.0.0-M4/maven-surefire-plugin/src/main/java/org/apache/maven/plugin/surefire/SurefirePlugin.java[source])
+
+[source,diff]
+[subs=+quotes]
+--
+<project>
+...
+<build>
+...
+<plugins
+...
+<plugin>
+    <artifactId>maven-surefire-plugin</artifactId>
++    <version>3.0.0-M4</version>
++    <configuration>
++      <useModulePath> [red]#false# </useModulePath>
++    </configuration>
+</plugin>
+...
+</plugins>
+...
+</build>
+...
+</project>
+--
+
+== Project structure
+
+* Production files
+** one module called `abc` +
+Module exports one package (`com.mycompany`) and keeps the other package (`com.mycompany.internal`) internal.
+** One class in the exported package: `App`
+** One class in the internal package: `Service` <- This is the one tested.
+* Test files
+** no module
+** One class containing one test: `ServiceTest::dummyTest`
+
+=== Observation
+
+From the industry standard footnote:[To the best of my knowledge, no version of JUnit or TestNG offered built-in constructs to test private methods.] principle:
+
+Original principle::
+_Test privates only through publicly available methods._
+
+because internal packages, all their comprising classes and methods qualify as the new _privates_,
+
+in the context of modularized applications the next derived principle follows:
+
+Derived principle::
+_Test internal packages only through classes in exported packages._ +
+
+By testing `com.mycompany.Service` we break the derived principle.
+
